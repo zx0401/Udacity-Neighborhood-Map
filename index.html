@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Neighborhood Map</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="Scripts/knockout-3.4.2.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+    <div class='header'>
+        <div class='menu-icon' data-bind="click: toggleSidebar">
+            <div class='menu-line'></div>
+            <div class='menu-line'></div>
+            <div class='menu-line'></div>
+            <div class='menu-line'></div>
+        </div>
+    </div>
+    <div class="container">
+        <div class="sidebar">
+            <h1>Apartments</h1>
+            <div id="search-field">
+                <input data-bind="value: searchText, valueUpdate: 'keyup', event: { keyup: searchApartment }" type="text" placeholder="Search your apartment.." id="search-box">
+                <ul data-bind="foreach: currentApartments">
+                    <li data-bind="text: name, click: $root.openApartmentMarker"></li>
+                </ul>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+</body>
+</html>
+
+<script>
+    // The map.
+    var map;
+
+    // The apartment view model.
+    function ApartmentsViewModel() {
+        var self = this;
+
+        // All apartments we have
+        self.sourceApartments = [
+            {name: 'Macara Gardens', location: {lat: 37.388818, lng: -122.043747}, id: 0},
+            {name: 'The Arches', location: {lat: 37.392034, lng: -121.991545}, id: 1},
+            {name: 'Marina Playa', location: {lat: 37.34866, lng: -121.99488}, id: 2},
+            {name: 'Arioso Apartments', location: {lat: 37.33269, lng: -122.016}, id: 3},
+            {name: 'Avalon Silicon Valley', location: {lat: 37.388608, lng: -121.993803}, id: 4},
+            {name: 'Avana Sunnyvale', location: {lat: 37.382349, lng: -122.013585}, id: 5},
+            {name: 'Loft House', location: {lat: 37.377487, lng: -122.032124}, id: 6},
+            {name: 'Verandas at Cupertino', location: {lat: 37.333631, lng: -122.024778}, id: 7},
+            {name: 'Reserve at Mountain View', location: {lat: 37.377208, lng: -122.06009}, id: 8},
+            {name: 'Birch Creek', location: {lat: 37.397316, lng: -122.099517}, id: 9}
+        ];
+
+        // Arrays for all apartments' marker
+        self.allMarkers = [];
+
+        // The current apartments showing in the list
+        self.currentApartments = ko.observableArray([]);
+
+        // Search text.
+        self.searchText = ko.observable('');
+
+        // Method to filter the apartments based on user's input
+        self.searchApartment = function() {
+            var name = self.searchText().toLowerCase();
+
+            // If user has input about the apartment's name, will do the filter of apartment list
+            if(name.length != 0) {
+                self.hideCurrentApartments();
+                for(var i=0; i<self.sourceApartments.length; i++) {
+                    if(self.sourceApartments[i].name.toLowerCase().startsWith(name)) {
+                        self.currentApartments.push(self.sourceApartments[i]);
+                    }
+                }
+
+                self.showCurrentApartments();
+            }
+            else {
+                // No user input, will show all the apartments in the map
+                self.showAllApartments();
+            }
+        };
+
+        // Method to toggle the sidebar on clicking of the menu icon
+        self.toggleSidebar = function() {
+            var width = document.getElementById('map').style.left;
+            if(width === '0px') {
+                document.getElementById('map').style.left = '350px';
+            }
+            else {
+                document.getElementById('map').style.left = '0px';
+            }
+        };
+
+        // Method to handle the request that user clicks the apartment in the list
+        self.openApartmentMarker = function(apartment) {
+            var id = apartment.id;
+            self.populateInfoWindow(self.allMarkers[id]);
+            map.setCenter(self.allMarkers[id].getPosition());
+        };
+
+        // Method to hide the current apartments
+        self.hideCurrentApartments = function() {
+            for (var i = 0; i < self.currentApartments().length; i++) {
+                var id = self.currentApartments()[i].id;
+                self.allMarkers[id].setMap(null);
+            }
+
+            self.currentApartments([]);
+        }
+
+        // Method to show the current apartments
+        self.showCurrentApartments = function() {
+            for (var i = 0; i < self.currentApartments().length; i++) {
+                var id = self.currentApartments()[i].id;
+                self.allMarkers[id].setMap(map);
+            }
+        }
+
+        // Method to populate the info window with the info loaded from Yelp api
+        self.populateInfoWindow = function populateInfoWindow(marker) {
+            // Check to see if the infowindow is opened
+            if (self.infoWindow.marker != marker) {
+                self.infoWindow.setContent('');
+
+                if(self.infoWindow.marker != null) {
+                    self.infoWindow.marker.setAnimation(null);
+                }
+
+                self.infoWindow.marker = marker;
+                marker.setAnimation(google.maps.Animation.BOUNCE);
+
+                // Api call to get apartment info through Yelp api, we're using a proxy server here
+                // to resolve the CORS issue
+                var url = 'http://localhost:8080/search?term=' + marker.title + '&latitude=' + marker.position.lat() + '&longitude=' + marker.position.lng();
+                fetch(url).then(function(response) {
+                    return response.json();
+                }).then(self.showYelpApiResponse)
+                .catch(self.handleError);
+
+                self.infoWindow.setContent('<div>Loading...</div>');
+                self.infoWindow.open(map, marker);
+            }
+        }
+
+        self.showYelpApiResponse = function(response) {
+            if(response.error != null) {
+                self.handleError(response.error);
+            }
+            else {
+                var apartmentInfo = response.businesses[0];
+                self.infoWindow.setContent('<div class="apartment-name">' + apartmentInfo.name + '</div><p class="info">Rating: ' + apartmentInfo.rating + '</p>' + '</div><p class="info">Phone: ' + apartmentInfo.phone + '</p>' + '</div><p class="info">' + apartmentInfo.location.address1 + '</p>' + '</div><p class="info">' + apartmentInfo.location.city + ', ' +  apartmentInfo.location.state + ' ' + apartmentInfo.location.zip_code  + '</p>');
+            }
+        }
+
+        self.handleError = function(error) {
+            self.infoWindow.setContent('<div class="error">Failed to load info from Yelp!</div><p class="info">' + error.description + '</p>');
+        }
+
+        // Method to create a new icon for the provided color
+        self.makeMarkerIcon = function(markerColor) {
+            var markerImage = new google.maps.MarkerImage(
+                'http://chart.googleapis.com/chart?chst=d_map_spin&chld=1.15|0|'+ markerColor + '|40|_|%E2%80%A2',
+                new google.maps.Size(21, 34),
+                new google.maps.Point(0, 0),
+                new google.maps.Point(10, 34),
+                new google.maps.Size(21, 34));
+            return markerImage;
+        }
+
+        // Method to show all apartments
+        self.showAllApartments = function() {
+            var bounds = new google.maps.LatLngBounds();
+
+            for (var i = 0; i < self.sourceApartments.length; i++) {
+                self.allMarkers[i].setMap(map);
+                bounds.extend(self.allMarkers[i].position);
+                self.currentApartments.push(self.sourceApartments[i]);
+            }
+
+            map.fitBounds(bounds);
+        }
+
+        // Initialize the view model, create all markers.
+        self.initialize = function() {
+            var defaultIcon = self.makeMarkerIcon('FE7569');
+            var highlightedIcon = self.makeMarkerIcon('FFFF24');
+
+            // Create the related markers for all source apartments
+            for (var i = 0; i < self.sourceApartments.length; i++) {
+                var position = self.sourceApartments[i].location;
+                var title = self.sourceApartments[i].name;
+
+                var marker = new google.maps.Marker({
+                    position: position,
+                    title: title,
+                    animation: google.maps.Animation.DROP,
+                    icon: defaultIcon,
+                    id: i
+                });
+
+                // Change icon based on the operation
+                marker.addListener('mouseover', function() {
+                    this.setIcon(highlightedIcon);
+                });
+
+                marker.addListener('mouseout', function() {
+                    this.setIcon(defaultIcon);
+                });
+
+                // Open the info window on clicking of the marker
+                marker.addListener('click', function() {
+                    self.populateInfoWindow(this);
+                });
+
+                // Save the marker in the all markers array
+                self.allMarkers.push(marker);
+            }
+
+            self.showAllApartments();
+
+            // Initialize the info window, we'll only allow to open one info window at the same time.
+            self.infoWindow = new google.maps.InfoWindow();
+            // Clear the marker, remove the animation if the info window is closed.
+            self.infoWindow.addListener('closeclick', function() {
+                if(this.marker != null) {
+                    this.marker.setAnimation(null);
+                    this.marker = null;
+                }
+            });
+        }
+    }
+
+    var viewModel = new ApartmentsViewModel();
+    ko.applyBindings(viewModel);
+
+    // Initialize the map
+    function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+            center: {lat: 37.389082, lng: -122.045421},
+            zoom: 13
+        });
+
+        // Initialize the view model.
+        viewModel.initialize();
+    }
+</script>
+
+<script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCFm0AfjLLPOwH3zQVfvu2zz6lqLeeMQdA&libraries=geometry,places,drawing&v=3&callback=initMap">
+</script>
+
+<style>
+    html,
+    body {
+        font-family: Arial, sans-serif;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    .container {
+        height: 100%;
+        position: relative;
+    }
+
+    h1 {
+        color: #DCDCDC;
+        font-size: 25px;
+        text-align: center;
+        margin-top: 0;
+        padding-top: 20px;
+    }
+
+    .sidebar {
+        background-color: #333333;
+        height: 100%;
+        left: 0;
+        top: 0;
+        width: 350px;
+    }
+
+    #search-field {
+        background-color: #FFFAF0;
+        margin: 40px 20px 0 20px;
+        width: 310px;
+    }
+
+    #search-box {
+        background-image: url('css/icon/search-icon.png');
+        background-position: 10px 10px;
+        background-size: 20px 20px;
+        background-repeat: no-repeat;
+        font-size: 15px;
+        border-bottom: 1px solid grey;
+        padding: 10px 10px 10px 40px;
+        display: block;
+        width: 258px;
+    }
+
+    .sidebar ul {
+        margin: 0;
+        padding: 0;
+    }
+
+    .sidebar li {
+        color: #000080;
+        padding: 10px 12px;
+        display: block;
+    }
+
+    .sidebar li:hover {
+        background-color: #ddd
+    }
+    
+    #map {
+        bottom:0px;
+        height: 100%;
+        left: 350px;
+        position: absolute;
+        right: 0px;
+    }
+
+    .error {
+        color: red;
+    }
+
+    .info {
+        margin-bottom: 0;
+    }
+
+    .apartment-name {
+        font-weight: bold;
+        font-size: 15px;
+    }
+
+    .header {
+        height: 0;
+    }
+
+    .menu-line {
+        height: 0;
+    }
+
+    @media screen and (max-width: 1000px) {
+        #map {
+            left: 0;
+        }
+
+        .header {
+            background-color: #333333;
+            height: 70px;
+        }
+
+        .menu-icon {
+            padding-top: 10px;
+            padding-left: 20px;
+        }
+
+        .menu-line {
+            width: 35px;
+            height: 5px;
+            background-color: #3399ff;
+            margin: 6px 0;
+        }
+    }
+</style>
