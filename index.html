@@ -26,7 +26,7 @@
                 </ul>
             </div>
         </div>
-        <div id="map"></div>
+        <div id="map" data-bind="style: { left: showSidebar() ? '350px' : '0px' }"></div>
     </div>
 </body>
 </html>
@@ -62,6 +62,9 @@
         // Search text.
         self.searchText = ko.observable('');
 
+        // Whether show the sidebar
+        self.showSidebar = ko.observable(window.innerWidth > 1000);
+
         // Method to filter the apartments based on user's input
         self.searchApartment = function() {
             var name = self.searchText().toLowerCase();
@@ -85,13 +88,7 @@
 
         // Method to toggle the sidebar on clicking of the menu icon
         self.toggleSidebar = function() {
-            var width = document.getElementById('map').style.left;
-            if(width === '0px') {
-                document.getElementById('map').style.left = '350px';
-            }
-            else {
-                document.getElementById('map').style.left = '0px';
-            }
+            self.showSidebar(!self.showSidebar());
         };
 
         // Method to handle the request that user clicks the apartment in the list
@@ -156,7 +153,12 @@
         }
 
         self.handleError = function(error) {
-            self.infoWindow.setContent('<div class="error">Failed to load info from Yelp!</div><p class="info">' + error.description + '</p>');
+            var errorMessage = '<div class="error">Failed to load info from Yelp!</div>';
+            if(error.description) {
+                errorMessage += '<p class="info">' + error.description + '</p>';
+            }
+
+            self.infoWindow.setContent(errorMessage);
         }
 
         // Method to create a new icon for the provided color
@@ -187,7 +189,7 @@
         self.initialize = function() {
             var defaultIcon = self.makeMarkerIcon('FE7569');
             var highlightedIcon = self.makeMarkerIcon('FFFF24');
-
+            
             // Create the related markers for all source apartments
             for (var i = 0; i < self.sourceApartments.length; i++) {
                 var position = self.sourceApartments[i].location;

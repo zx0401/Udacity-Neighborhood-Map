@@ -1,0 +1,24 @@
+{
+  "name": "Udacity-Neighborhood-Map",
+  "version": "1.0.0",
+  "description": "## Prerequisite",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zx0401/Udacity-Neighborhood-Map.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zx0401/Udacity-Neighborhood-Map/issues"
+  },
+  "homepage": "https://github.com/zx0401/Udacity-Neighborhood-Map#readme",
+  "dependencies": {
+    "express": "^4.16.3",
+    "request": "^2.87.0"
+  }
+}

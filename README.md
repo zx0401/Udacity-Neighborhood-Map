@@ -5,11 +5,7 @@
 Please [Download Node.js](https://nodejs.org/en/download/), and use the following command to install the express and request module.
 
 ```sh
-npm install express
-```
-
-```sh
-npm install request
+npm install
 ```
 
 ## Run the app
