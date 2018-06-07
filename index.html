@@ -248,10 +248,15 @@
         // Initialize the view model.
         viewModel.initialize();
     }
+
+    // Process the error of loading google maps
+    function googleMapError() {
+        alert("Failed to load goolge maps, please check your network connection");
+    }
 </script>
 
 <script async defer
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCFm0AfjLLPOwH3zQVfvu2zz6lqLeeMQdA&libraries=geometry,places,drawing&v=3&callback=initMap">
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCFm0AfjLLPOwH3zQVfvu2zz6lqLeeMQdA&libraries=geometry,places,drawing&v=3&callback=initMap" onerror="googleMapError()">
 </script>
 
 <style>
